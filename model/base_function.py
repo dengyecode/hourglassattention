@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
-from .external_function import SpectralNorm
 import math
 import numbers
 from torch.nn import functional as F
@@ -123,14 +122,6 @@ def _unfreeze(*args):
         if module:
             for p in module.parameters():
                 p.requires_grad = True
-
-
-def spectral_norm(module, use_spect=True):
-    """use spectral normal layer to stable the training process"""
-    if use_spect:
-        return SpectralNorm(module)
-    else:
-        return module
 
 
 

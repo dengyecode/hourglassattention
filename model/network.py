@@ -34,7 +34,6 @@ class Generator(nn.Module):
         x = x + noise
         feature = torch.cat([x, mask], dim=1)
         feature = self.down(feature)
-        #m = F.interpolate(mask, size=feature.size()[-2:], mode='nearest')
         feature = self.transE1(feature)
         feature = self.transE2(feature)
         feature = self.transE3(feature)
@@ -98,7 +97,6 @@ class Encoder(nn.Module):
         super().__init__()
         self.encoder1 = ResBlock0(in_ch=4, out_ch=ngf, kernel_size=5, stride=1, padding=2)
         self.encoder2 = ResBlock(in_ch=ngf, out_ch=ngf*2, kernel_size=3, stride=2, padding=1)
-
 
         self.encoder22 = ResBlock(in_ch=ngf*2, out_ch=ngf*2, kernel_size=3, stride=1, padding=1)
         self.encoder32 = ResBlock(in_ch=ngf*4, out_ch=ngf*4, kernel_size=3, stride=1, padding=1)
@@ -201,7 +199,6 @@ class ResBlock(nn.Module):
 class TransformerEncoder(nn.Module):
     def __init__(self, patchsizes, num_hidden=256, dis=None):
         super().__init__()
-        #self.attn = MultiPatchAttention(patchsizes, num_hidden)
         self.attn = MultiPatchMultiAttention(patchsizes, num_hidden, dis)
         self.feed_forward = FeedForward(num_hidden)
 
@@ -257,8 +254,6 @@ class MultiAttn(nn.Module):
         super().__init__()
         self.h = head
 
-        #self.output_linear = nn.Sequential(nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1), nn.LeakyReLU(0.2, inplace=True))
-
         self.attn = Attention()
 
     def forward(self, query, key, value, mask=None, dis=None):
@@ -283,67 +278,6 @@ class MultiAttn(nn.Module):
         return out, attn
 
 
-class MultiPatchAttention(nn.Module):
-    """
-    Take in model size and number of heads.
-    """
-
-    def __init__(self, patchsizes, num_hidden):
-        super().__init__()
-        self.patchsize = patchsizes
-        self.num_head = len(patchsizes)
-        self.num_hidden_per_attn = num_hidden // self.num_head
-        self.query_embedding = nn.Conv2d(
-            num_hidden, num_hidden, kernel_size=1, padding=0)
-        self.value_embedding = nn.Conv2d(
-            num_hidden, num_hidden, kernel_size=1, padding=0)
-        self.key_embedding = nn.Conv2d(
-            num_hidden, num_hidden, kernel_size=1, padding=0)
-        self.output_linear = nn.Sequential(
-            nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.2, inplace=True))
-        self.attention = Attention()
-
-    def forward(self, query, key, value, mask=None):
-        residual = query
-        B, C, H, W = query.size()
-        output = []
-        q_group = self.query_embedding(query)
-        k_group = self.key_embedding(key)
-        v_group = self.value_embedding(value)
-        for s, q, k, v in zip(self.patchsize,
-                            torch.chunk(q_group, self.num_head, dim=1),
-                            torch.chunk(k_group, self.num_head, dim=1),
-                            torch.chunk(v_group, self.num_head, dim=1)):
-            num_w = W // s
-            num_h = H // s
-            m = mask.view(B, 1, num_h, s, num_w, s)
-            m = m.permute(0, 2, 4, 1, 3, 5).contiguous().view(
-                B,  num_h*num_w, s*s)
-            m = (m.mean(-1) > 0.5).unsqueeze(1).repeat(1, num_w*num_h, 1)
-            # 1) embedding and reshape
-
-            q = q.view(B, self.num_hidden_per_attn, num_h, s, num_w, s)
-            k = k.view(B, self.num_hidden_per_attn, num_h, s, num_w, s)
-            v = v.view(B, self.num_hidden_per_attn, num_h, s, num_w, s)
-            q = q.permute(0, 2, 4, 1, 3, 5).contiguous().view(
-                B,  num_h*num_w, self.num_hidden_per_attn*s*s)
-            k = k.permute(0, 2, 4, 1, 3, 5).contiguous().view(
-                B,  num_h*num_w, self.num_hidden_per_attn*s*s)
-            v = v.permute(0, 2, 4, 1, 3, 5).contiguous().view(
-                B,  num_h*num_w, self.num_hidden_per_attn*s*s)
-
-            result, _ = self.attention(q, k, v, m)
-            # 3) "Concat" using a view and apply a final linear.
-            result = result.view(B, num_h, num_w, self.num_hidden_per_attn, s, s)
-            result = result.permute(0, 3, 1, 4, 2, 5).contiguous().view(B, self.num_hidden_per_attn, H, W)
-            output.append(result)
-        output = torch.cat(output, 1)
-        x = self.output_linear(output)
-        x = x + residual
-        return x
-
-# Standard 2 layerd FFN of transformer
 class FeedForward(nn.Module):
     def __init__(self, num_hidden):
         super(FeedForward, self).__init__()
@@ -361,59 +295,7 @@ class FeedForward(nn.Module):
         return x
 
 
-class StandardMultiAtten(nn.Module):
-    """
-    Attention Network
-    """
-
-    def __init__(self, num_hidden, head=4):
-        """
-        :param num_hidden: dimension of hidden
-        :param h: num of heads
-        key, value, query B*C*H*W
-        """
-        super().__init__()
-
-        self.num_hidden = num_hidden
-        self.num_hidden_per_attn = num_hidden // head
-        self.h = head
-
-        self.key = nn.Conv2d(num_hidden, num_hidden, kernel_size=1)
-        self.value = nn.Conv2d(num_hidden, num_hidden, kernel_size=1)
-        self.query = nn.Conv2d(num_hidden, num_hidden, kernel_size=1)
-        self.output_linear = nn.Sequential(
-            nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.2, inplace=True)
-        )
-
-        self.attn = Attention()
-        self.layer_norm = nn.LayerNorm(num_hidden)
-
-    def forward(self, query, key, value, mask):
-        residual = query
-        B,C,H,W = key.size()
-        k = self.key(key).view(B, C, H*W).permute(0,2,1).contiguous().view(B, H*W, self.h, self.num_hidden_per_attn)
-        v = self.value(value).view(B, C, -1).permute(0,2,1).contiguous().view(B, H*W, self.h, self.num_hidden_per_attn)
-        q = self.query(query).view(B, C, -1).permute(0,2,1).contiguous().view(B, H*W, self.h, self.num_hidden_per_attn)
-
-        k = k.permute(2,0,1,3).contiguous().view(-1, H*W, self.num_hidden_per_attn)
-        v = v.permute(2,0,1,3).contiguous().view(-1, H*W, self.num_hidden_per_attn)
-        q = q.permute(2,0,1,3).contiguous().view(-1, H*W, self.num_hidden_per_attn)
-
-        out, _ = self.attn(q, k, v, mask)
-        out = out.view(self.h, B, H*W, self.num_hidden_per_attn)
-        out = out.permute(1, 2, 0, 3).contiguous().view(B, H*W, C)
-        out = out.permute(0, 2, 1).contiguous().view(B, C, H, W)
-        out = self.output_linear(out)
-        out = out + residual
-        return out
-
-
 class MultiPatchMultiAttention(nn.Module):
-    """
-    Take in model size and number of heads.
-    """
-
     def __init__(self, patchsize, num_hidden, dis):
         super().__init__()
         self.ps = patchsize
@@ -478,7 +360,7 @@ def spectral_norm(module, mode=True):
 
     return module
 
-
+# compute the l1 distance between feature patches
 def lap(s):
     outk = []
 

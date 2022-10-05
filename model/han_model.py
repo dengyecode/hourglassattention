@@ -1,6 +1,6 @@
 import torch
-from .base_model import BaseModel
-from . import base_function, network
+from model.base_model import BaseModel
+from model import base_function, network
 import itertools
 from model.loss import AdversarialLoss, PerceptualLoss, StyleLoss
 
