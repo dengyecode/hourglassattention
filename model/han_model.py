@@ -13,10 +13,10 @@ class Han(BaseModel):
     def modify_options(parser, is_train=True):
         """Add new options and rewrite default values for existing options"""
         if is_train:
-            parser.add_argument('--lambda_per', type=float, default=1, help='weight for image reconstruction loss')
-            parser.add_argument('--lambda_l1', type=float, default=1, help='weight for kl divergence loss')
+            parser.add_argument('--lambda_per', type=float, default=1, help='weight for perceptual loss')
+            parser.add_argument('--lambda_l1', type=float, default=1, help='weight for reconstruction loss l1')
             parser.add_argument('--lambda_g', type=float, default=0.1, help='weight for generation loss')
-            parser.add_argument('--lambda_sty', type=float, default=250, help='weight for generation loss')
+            parser.add_argument('--lambda_sty', type=float, default=250, help='weight for sty loss')
 
         return parser
 
