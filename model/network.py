@@ -30,8 +30,6 @@ class Generator(nn.Module):
             setattr(self, 'transD'+str(i+1), block)
 
     def forward(self, x, mask):
-        noise = torch.normal(mean=torch.zeros_like(x), std=torch.ones_like(x) * (1. / 256.))
-        x = x + noise
         feature = torch.cat([x, mask], dim=1)
         feature = self.down(feature)
         feature = self.transE1(feature)
