@@ -25,6 +25,7 @@ class Han(BaseModel):
         BaseModel.__init__(self, opt)
 
         self.loss_names = ['app_g', 'ad_g', 'img_d', 'per', 'sty']
+        self.visual_names = ['img_m', 'img_truth', 'img_out', 'img_g']
         self.model_names = ['G', 'D',]
 
         # define the inpainting model
