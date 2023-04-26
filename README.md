@@ -1,4 +1,6 @@
 # Hourglass Attention Network for Image Inpainting ECCV 2022
+# visualization during training
+python - m visdom.server
 # train:
 python train.py --no_flip --no_rotation --no_augment --image_file your_data --lr 1e-4
 # fine_tune:
